@@ -1,8 +1,13 @@
 
-// Hunter Stout, HW2.
+// Hunter Stout, HW2. :D
+// 12/10/2024.
 
 #include <iostream>
+#include <fstream>
+#include <unistd.h>
 #include "constants.h"
+
+static bool debug = false;
 
 class Key {
     public:
@@ -10,19 +15,22 @@ class Key {
         vector<bool> k2;
 };
 
-//Helper Functions.
-vector<char> GetFile();
+//Helper Declaration.
+vector<char> GetFile(ifstream& stream);
+vector<char> GetInput();
 string EasyBinaryString(vector<bool> bin);
 vector<bool> EasyGetHalf(vector<bool> original, bool isLeft);
 vector<bool> EasyCombine(vector<bool> left, vector<bool> right);
 vector<bool> PerformPermutation(int operationNumber, vector<bool> before);
+vector<bool> CharToBinary(char input);
+char BinaryToChar(vector<bool> input);
 
-//Key Gen Functions.
+//Key Gen Declaration.
 Key GenerateKey(int originalKey);
 vector<bool> DecimalToBinary(int num);
 vector<bool> GetLeftShift(vector<bool> before, int amount);
 
-//SDES Functions.
+//SDES Declaration.
 vector<bool> PlainToCipher(vector<bool> plain, Key key);
 vector<bool> CipherToPlain(vector<bool> cipher, Key key);
 vector<bool> PerformRound(vector<bool> before, vector<bool> key);
@@ -30,36 +38,83 @@ vector<bool> PerformXOR(vector<bool> first, vector<bool> second);
 vector<bool> MatrixLookup(vector<bool> coords, bool isS0);
 int GetIndex(bool first, bool second);
 
+
+//Main.
+
 int main(int argc, char* argv[]) {
 
     Key key = GenerateKey(stoi(string(argv[1]).substr(2, 3), nullptr, 16));
 
-    vector<bool> letterA = {0,1,1,0,0,0,0,1};
-    vector<bool> encrypt = PlainToCipher(letterA, key);
-    cout << "\n\nResult Of Encrypt: " << EasyBinaryString(encrypt) << "\n\n";
-    vector<bool> decrypt = CipherToPlain(encrypt, key);
-    cout << "\n\nResult Of Decrypt: " << EasyBinaryString(decrypt) << "\n\n";
+    bool isEncrypt = getpid() % 2 == 0;
 
-    /*vector<char> fileContents = GetFile();
+    cout << "Hello, it appears you're in " << (isEncrypt ? "en" : "de") << "crypt mode.\n"
+    << "Would you like to use an input file (1) or stdin (2) as your input?\nPlease enter 1 or 2: ";
+    string choice;
+    getline(cin, choice);
+    cout << "\n";
+    bool isInFile = choice == "1";
+    ifstream in;
 
-    cout << endl << endl << endl;
-    for (size_t i = 0; i < fileContents.size(); i++) {
-        cout << fileContents[i];
+    if (isInFile) {
+        cout << "Please enter the file to input results (ex: input.txt): ";
+        getline(cin, choice);
+        cout << "\n";
+        in.open(choice);
+        isInFile = !in.fail();
     }
-    cout << endl << endl << endl;*/
+    
+    vector<char> contents = isInFile ? GetFile(in) : GetInput();
+
+    cout << "Would you like to see debug information? (Y or N): ";
+    getline(cin, choice);
+    cout << "\n";
+    debug = choice == "Y";
+
+    cout << "Would you like to print results to a file (1) or stdout (2)?\nPlease enter 1 or 2: ";
+    getline(cin, choice);
+    cout << "\n";
+    bool isToFile = choice == "1";
+    ofstream file;
+
+    if (isToFile) {
+        cout << "Please enter the file to output results (ex: cipher.txt): ";
+        getline(cin, choice);
+        cout << "\n";
+        file.open(choice);
+        isToFile = !file.fail();
+    }
+
+    for (size_t i = 0; i < contents.size(); i++) {
+        vector<bool> binary = CharToBinary(contents[i]);
+        (isToFile ? file : cout) << BinaryToChar(isEncrypt ? PlainToCipher(binary, key) : CipherToPlain(binary, key));
+    }
+
+    if (!isToFile) { cout << "\n"; }
+
     return 0;
 }
 
-#pragma region Helpers
 
-vector<char> GetFile() {
+// Helper Functions.
+
+vector<char> GetFile(ifstream& stream) {
     vector<char> retVal;
     string temp;
-    while (getline(cin, temp)) {
+    while (getline(stream, temp)) {
         for(size_t i = 0; i < temp.size(); i++) {
             retVal.push_back(temp[i]);
         }
     }
+    return retVal;
+}
+
+vector<char> GetInput() {
+    vector<char> retVal;
+    string input;
+    cout << "Please enter string: ";
+    getline(cin, input);
+    cout << "\n";
+    for (size_t i = 0; i < input.size(); i++) { retVal.push_back(input[i]); }
     return retVal;
 }
 
@@ -96,23 +151,32 @@ vector<bool> PerformPermutation(int operationNumber, vector<bool> before) {
     return retVal;
 }
 
-#pragma endregion
+vector<bool> CharToBinary(char input) {
+    vector<bool> retVal;
+    for (int i = 7; i >= 0; --i) { retVal.push_back((input >> i) & 1); }
+    return retVal;
+}
 
+char BinaryToChar(vector<bool> input) {
+    char retVal = 0;
+    for (size_t i = 0; i < input.size(); ++i) {
+        if (input[i]) { retVal |= (1 << (7 - i)); }
+    }
+    return retVal;
+}
+
+
+// Key Gen Functions.
 
 Key GenerateKey(int originalKey) {
-
     Key retVal;
-
     if (debug) { cout << "\nStarting Key Generation (" << originalKey << ")...\n"; }
-
     vector<bool> p10 = PerformPermutation(operationP10, DecimalToBinary(originalKey));
     vector<bool> left = GetLeftShift(EasyGetHalf(p10, 1), 1);
     vector<bool> right = GetLeftShift(EasyGetHalf(p10, 0), 1);
     retVal.k1 = PerformPermutation(operationP8, EasyCombine(left, right));
     retVal.k2 = PerformPermutation(operationP8, EasyCombine(GetLeftShift(left, 2), GetLeftShift(right, 2)));
-
     if (debug) { cout << "\nFinished Key Generation (k1:" << EasyBinaryString(retVal.k1) << ", k2:" << EasyBinaryString(retVal.k2) << ")...\n"; }
-
     return retVal;
 }
 
@@ -142,6 +206,9 @@ vector<bool> PlainToCipher(vector<bool> plain, Key key) {
     if (debug) { cout << "\nP->C Finished (" << EasyBinaryString(retVal) << ")...\n"; }
     return retVal;
 }
+
+
+// SDES Functions.
 
 vector<bool> CipherToPlain(vector<bool> cipher, Key key) {
     if (debug) { cout << "\nC->P Started (" << EasyBinaryString(cipher) << ")...\n"; }

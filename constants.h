@@ -5,8 +5,6 @@
 #include <vector>
 using namespace std;
 
-const bool debug = true;
-
 const string s0[4][4] = {
     {"01", "00", "11", "10"},
     {"11", "10", "01", "00"},
